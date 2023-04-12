@@ -53,11 +53,11 @@ pub fn ExtraPackedEnum(comptime T: type) type {
         pub const PackedType = math.IntFittingRange(0, info.fields.len - 1);
         pub fn pack(unpacked_data: T) PackedType {
             const as_int = @enumToInt(unpacked_data);
-            inline for (info.fields) |field, i| if (field.value == as_int) return i;
+            inline for (info.fields, 0..) |field, i| if (field.value == as_int) return i;
             unreachable;
         }
         pub fn unpack(packed_data: PackedType) T {
-            inline for (info.fields) |field, i| if (packed_data == i) return @field(T, field.name);
+            inline for (info.fields, 0..) |field, i| if (packed_data == i) return @field(T, field.name);
             unreachable;
         }
     } else struct {
@@ -98,7 +98,7 @@ pub fn ExtraPackedOptional(comptime T: type) type {
 pub fn ExtraPackedStruct(comptime T: type) type {
     const info = @typeInfo(T).Struct;
     comptime var specs = [_]type{undefined} ** info.fields.len;
-    inline for (specs) |*spec, i| spec.* = ExtraPacked(info.fields[i].field_type);
+    inline for (&specs, 0..) |*spec, i| spec.* = ExtraPacked(info.fields[i].type);
     comptime var p = 1;
     inline for (specs) |spec| p *= spec.Possibilities;
     return struct {
@@ -118,7 +118,7 @@ pub fn ExtraPackedStruct(comptime T: type) type {
         pub fn unpack(packed_data: PackedType) T {
             var result: T = undefined;
             var current_p = packed_data;
-            inline for (Specs) |spec, i| {
+            inline for (Specs, 0..) |spec, i| {
                 @field(result, info.fields[i].name) = spec.unpack(
                     @intCast(spec.PackedType, current_p % spec.Possibilities),
                 );
@@ -131,7 +131,7 @@ pub fn ExtraPackedStruct(comptime T: type) type {
         pub fn getField(
             comptime field_name: FieldEnum,
             packed_data: PackedType,
-        ) info.fields[@enumToInt(field_name)].field_type {
+        ) info.fields[@enumToInt(field_name)].type {
             const field_ind = @enumToInt(field_name);
             comptime var skip_p = 1;
             comptime var i = 0;
@@ -147,7 +147,7 @@ pub fn ExtraPackedStruct(comptime T: type) type {
         pub fn setField(
             comptime field_name: FieldEnum,
             packed_data: *PackedType,
-            unpacked_field: info.fields[@enumToInt(field_name)].field_type,
+            unpacked_field: info.fields[@enumToInt(field_name)].type,
         ) void {
             const field_ind = @enumToInt(field_name);
             comptime var skip_p = 1;
@@ -221,9 +221,9 @@ pub fn ExtraPackedArray(comptime T: type) type {
 pub fn ExtraPackedUnion(comptime T: type) type {
     const info = @typeInfo(T).Union;
     comptime var specs = [_]type{undefined} ** info.fields.len;
-    inline for (specs) |*spec, i| spec.* = ExtraPacked(info.fields[i].field_type);
+    inline for (&specs, 0..) |*spec, i| spec.* = ExtraPacked(info.fields[i].type);
     comptime var cumulative_p = [_]comptime_int{undefined} ** info.fields.len;
-    inline for (cumulative_p) |*val, i| {
+    inline for (&cumulative_p, 0..) |*val, i| {
         const last = if (i == 0) 0 else cumulative_p[i - 1];
         val.* = last + specs[i].Possibilities;
     }
@@ -235,7 +235,7 @@ pub fn ExtraPackedUnion(comptime T: type) type {
         pub const PackedType = math.IntFittingRange(0, Possibilities - 1);
         pub fn pack(unpacked_data: T) PackedType {
             const tag = @as(Tag, unpacked_data);
-            inline for (Specs) |spec, i| {
+            inline for (Specs, 0..) |spec, i| {
                 if (@field(Tag, info.fields[i].name) == tag) {
                     const from = if (i == 0) 0 else CumulativePossibilities[i - 1];
                     return from + @as(PackedType, spec.pack(@field(unpacked_data, info.fields[i].name)));
@@ -244,7 +244,7 @@ pub fn ExtraPackedUnion(comptime T: type) type {
             unreachable;
         }
         pub fn unpack(packed_data: PackedType) T {
-            inline for (Specs) |spec, i| {
+            inline for (Specs, 0..) |spec, i| {
                 if (packed_data < CumulativePossibilities[i]) {
                     const last = if (i == 0) 0 else CumulativePossibilities[i - 1];
                     return @unionInit(
@@ -263,7 +263,7 @@ pub fn ExtraPackedUnion(comptime T: type) type {
         pub fn getField(
             comptime field_name: FieldEnum,
             packed_data: PackedType,
-        ) info.fields[@enumToInt(field_name)].field_type {
+        ) info.fields[@enumToInt(field_name)].type {
             const field_ind = @enumToInt(field_name);
             const from = if (field_ind == 0) 0 else CumulativePossibilities[field_ind - 1];
             const to = CumulativePossibilities[field_ind];
